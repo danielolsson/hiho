@@ -1,16 +1,16 @@
 /**
  * Copyright 2010 Nube Technologies
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); 
- * you may not use this file except in compliance with the License. 
- * You may obtain a copy of the License at 
- * 
- * http://www.apache.org/licenses/LICENSE-2.0 
- * 
- * Unless required by applicable law or agreed to in writing, software distributed 
- * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR 
- * CONDITIONS OF ANY KIND, either express or implied. 
- * See the License for the specific language governing permissions and limitations under the License. 
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  */
 
 package co.nubetech.hiho.common;
@@ -29,6 +29,8 @@ public interface HIHOConf {
 	// for loading data to MySQL database
 	public static final String LOAD_QUERY_SUFFIX = "mapreduce.jdbc.hiho.load.query.suffix";
 	public static final String NUMBER_MAPPERS = "mapreduce.jdbc.hiho.number.mappers";
+	public static final String LOAD_HAS_HEADER = "mapreduce.jdbc.hiho.mysql.headers";
+	public static final String LOAD_KEY_IS_TABLENAME = "mapreduce.jdbc.hiho.mysql.fileNameIsTable";
 
 	// for loading oracle data
 	public static final String EXTERNAL_TABLE_DML = "mapreduce.jdbc.hiho.oracle.externaltable.dml";
@@ -58,7 +60,7 @@ public interface HIHOConf {
 
 	/*
 	 * for loading data in hive
-	 * 
+	 *
 	 * ////add comments for each conf ////All confs should follow camel casing
 	 */
 	public static final String HIVE_DRIVER = "mapreduce.jdbc.hiho.hive.driver";
@@ -74,7 +76,7 @@ public interface HIHOConf {
 	// conf for mergeJob
 	public static final String MERGE_OLD_PATH = "mapreduce.jdbc.hiho.merge.mergeOldPath";
 	public static final String MERGE_NEW_PATH = "mapreduce.jdbc.hiho.merge.mergeNewPath";
-	
+
 	public static final String COLUMN_INFO = "mapreduce.jdbc.hiho.db.columnInfo";
 
 }
