@@ -116,9 +116,9 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 			stmt.setLocalInfileInputStream(val);
 			query = "load data local infile 'abc.txt' into table"
 					+ (keyIsTableName ? " " + key.toString() : "");
+			query += " " + querySuffix;
 			if (hasHeaderLine)
 				query += " (" + StringUtils.join(tableNames, ",") + ")";
-			query += " " + querySuffix;
 			// query += "mrTest fields terminated by ','";
 			logger.debug("stmt: " + query);
 			int rows = stmt.executeUpdate(query);

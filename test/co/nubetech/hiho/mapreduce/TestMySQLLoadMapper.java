@@ -112,7 +112,7 @@ public class TestMySQLLoadMapper {
 		Connection con = mock(Connection.class);
 		com.mysql.jdbc.Statement stmt = mock(com.mysql.jdbc.Statement.class);
 		mapper.setConnection(con);
-		String query = "load data local infile 'abc.txt' into table tablename (col1,col2,col3) fields terminated by ','";
+		String query = "load data local infile 'abc.txt' into table tablename fields terminated by ',' (col1,col2,col3)";
 		when(
 				 con.createStatement(
 						ResultSet.TYPE_SCROLL_SENSITIVE,
