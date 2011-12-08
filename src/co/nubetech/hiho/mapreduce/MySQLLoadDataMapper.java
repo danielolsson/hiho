@@ -26,26 +26,23 @@ import java.sql.SQLException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.Mapper;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.ivy.util.StringUtils;
 import org.apache.log4j.Logger;
 
 import co.nubetech.apache.hadoop.DBConfiguration;
 import co.nubetech.hiho.common.HIHOConf;
 
-public class MySQLLoadDataMapper extends MapReduceBase implements
+public class MySQLLoadDataMapper extends
 		Mapper<Text, FSDataInputStream, NullWritable, NullWritable> {
 
 	final static Logger logger = Logger
 			.getLogger(co.nubetech.hiho.mapreduce.MySQLLoadDataMapper.class);
 	private Connection conn;
-	protected String querySuffix;
-	protected boolean hasHeaderLine;
-	protected boolean keyIsTableName;
+
+	static enum Counters {
+		NUM_OF_INSERTED_ROWS
+	}
 
 	public void setConnection(Connection con) throws IOException{
 		conn=con;
@@ -56,16 +53,18 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 	}
 
 
-	public void configure(JobConf job) {
+	@Override
+	protected void setup(Mapper.Context context) throws IOException,
+			InterruptedException {
 		try {
 			Class.forName("com.mysql.jdbc.Driver").newInstance();
 
-			String connString = job.get(DBConfiguration.URL_PROPERTY);
-			String username = job.get(DBConfiguration.USERNAME_PROPERTY);
-			String password = job.get(DBConfiguration.PASSWORD_PROPERTY);
-			querySuffix = job.get(HIHOConf.LOAD_QUERY_SUFFIX);
-			hasHeaderLine = job.getBoolean(HIHOConf.LOAD_HAS_HEADER, false);
-			keyIsTableName = job.getBoolean(HIHOConf.LOAD_KEY_IS_TABLENAME, false);
+			String connString = context.getConfiguration().get(
+					DBConfiguration.URL_PROPERTY);
+			String username = context.getConfiguration().get(
+					DBConfiguration.USERNAME_PROPERTY);
+			String password = context.getConfiguration().get(
+					DBConfiguration.PASSWORD_PROPERTY);
 
 			logger.debug("Connection values are " + connString + " " + username
 					+ "/" + password);
@@ -73,6 +72,7 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 
 		} catch (Exception e) {
 			e.printStackTrace();
+			throw new IOException(e);
 		}
 
 	}
@@ -93,19 +93,26 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 		}
 	}
 
-	public void map(Text key, FSDataInputStream val,
-			OutputCollector<NullWritable, NullWritable> collector,
-			Reporter reporter) throws IOException {
+	@Override
+	public void map(Text key, FSDataInputStream val, Context context)
+			throws IOException, InterruptedException {
 
 		conn=getConnection();
 		com.mysql.jdbc.Statement stmt = null;
 		String query;
+		String querySuffix = context.getConfiguration().get(
+				HIHOConf.LOAD_QUERY_SUFFIX);
+		boolean hasHeaderLine = context.getConfiguration().getBoolean(
+				HIHOConf.LOAD_HAS_HEADER, false);
+		boolean keyIsTableName = context.getConfiguration().getBoolean(
+				HIHOConf.LOAD_KEY_IS_TABLENAME, false);
 
-		String[] tableNames = null;
+		String[] columnNames = null;
 		if (hasHeaderLine) {
-			BufferedReader headerReader = new BufferedReader(new InputStreamReader(val));
+			BufferedReader headerReader = new BufferedReader(
+					new InputStreamReader(val));
 			String header = headerReader.readLine();
-			tableNames = header.split(",");
+			columnNames = header.split(",");
 			val.seek(header.getBytes(utf8).length + newline.length);
 		}
 		try {
@@ -118,11 +125,11 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 					+ (keyIsTableName ? " " + key.toString() : "");
 			query += " " + querySuffix;
 			if (hasHeaderLine)
-				query += " (" + StringUtils.join(tableNames, ",") + ")";
-			// query += "mrTest fields terminated by ','";
+				query += " (" + StringUtils.join(columnNames, ",") + ")";
 			logger.debug("stmt: " + query);
 			int rows = stmt.executeUpdate(query);
 			logger.debug(rows + " rows updated");
+			context.getCounter(Counters.NUM_OF_INSERTED_ROWS).increment(rows);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -139,7 +146,9 @@ public class MySQLLoadDataMapper extends MapReduceBase implements
 		}
 	}
 
-	public void close() throws IOException {
+	@Override
+	protected void cleanup(Mapper.Context context) throws IOException,
+			InterruptedException {
 		try {
 			if (conn != null) {
 				conn.close();

@@ -14,9 +14,8 @@
  */
 package co.nubetech.hiho.mapreduce;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,15 +24,18 @@ import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.ResultSet;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.junit.Test;
 
 import co.nubetech.apache.hadoop.DBConfiguration;
 import co.nubetech.hiho.common.HIHOConf;
+import co.nubetech.hiho.mapreduce.MySQLLoadDataMapper.Counters;
 
 public class TestMySQLLoadMapper {
 
@@ -42,28 +44,20 @@ public class TestMySQLLoadMapper {
 	@Test
 	public final void testSetup() throws Exception {
 
-		//JobConf job = mock(JobConf.class);
+		Mapper.Context context = mock(Mapper.Context.class);
 		MySQLLoadDataMapper mapper = new MySQLLoadDataMapper() {
-			public void configure(JobConf conf) {
-				super.configure(conf);
-				assertEquals("querySuffix not equal!", QUERY_SUFFIX, this.querySuffix);
-				assertTrue("hasHeaderLine not true!", this.hasHeaderLine);
-				assertTrue("keyIsTableName not true!", this.keyIsTableName);
-			}
 			protected void connect(String curl, String u, String p) {	}
 		};
-		/* DriverManager driverManager = mock(DriverManager.class); */
-		JobConf conf = new JobConf();
+		Configuration conf = new Configuration();
 		String url = "jdbc:mysql://localhost:3306/hiho";
 		String usrname = "root";
 		String password = "newpwd";
 		conf.set(DBConfiguration.URL_PROPERTY, url);
 		conf.set(DBConfiguration.USERNAME_PROPERTY, usrname);
 		conf.set(DBConfiguration.PASSWORD_PROPERTY, password);
-		conf.set(HIHOConf.LOAD_QUERY_SUFFIX, QUERY_SUFFIX);
-		conf.setBoolean(HIHOConf.LOAD_HAS_HEADER, true);
-		conf.setBoolean(HIHOConf.LOAD_KEY_IS_TABLENAME, true);
-		mapper.configure(conf);
+		when(context.getConfiguration()).thenReturn(conf);
+		mapper.setup(context);
+		verify(context, times(3)).getConfiguration();
 	}
 
 	class MyInputStream extends InputStream implements Seekable, PositionedReadable {
@@ -100,27 +94,29 @@ public class TestMySQLLoadMapper {
 	@Test
 	public final void testMapper() throws Exception {
 
-		MySQLLoadDataMapper mapper = new MySQLLoadDataMapper() {
-			{
-				querySuffix = QUERY_SUFFIX;
-				hasHeaderLine = true;
-				keyIsTableName = true;
-			}
-		};
+		Mapper.Context context = mock(Mapper.Context.class);
+		MySQLLoadDataMapper mapper = new MySQLLoadDataMapper();
 		FSDataInputStream val;
 		val = new FSDataInputStream(new MyInputStream());
 		Connection con = mock(Connection.class);
 		com.mysql.jdbc.Statement stmt = mock(com.mysql.jdbc.Statement.class);
 		mapper.setConnection(con);
-		String query = "load data local infile 'abc.txt' into table tablename fields terminated by ',' (col1,col2,col3)";
+		String query = "load data local infile 'abc.txt' into table tablename " + QUERY_SUFFIX + " (col1,col2,col3)";
 		when(
 				 con.createStatement(
 						ResultSet.TYPE_SCROLL_SENSITIVE,
 						ResultSet.CONCUR_UPDATABLE)).thenReturn(stmt);
+		Configuration conf = new Configuration();
+		conf.set(HIHOConf.LOAD_QUERY_SUFFIX, QUERY_SUFFIX);
+		conf.setBoolean(HIHOConf.LOAD_KEY_IS_TABLENAME, true);
+		conf.setBoolean(HIHOConf.LOAD_HAS_HEADER, true);
+		when(context.getConfiguration()).thenReturn(conf);
 		when(stmt.executeUpdate(query)).thenReturn(10);
-		mapper.map(new Text("tablename"), val, null, null);
+		Counter counter = mock(Counter.class);
+		when(context.getCounter(Counters.NUM_OF_INSERTED_ROWS)).thenReturn(counter);
+		mapper.map(new Text("tablename"), val, context);
 		verify(stmt).setLocalInfileInputStream(val);
 		verify(stmt).executeUpdate(query);
-
+		verify(counter).increment(10);
 	}
 }
