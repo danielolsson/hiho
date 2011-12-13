@@ -40,10 +40,6 @@ public class MySQLLoadDataMapper extends
 			.getLogger(co.nubetech.hiho.mapreduce.MySQLLoadDataMapper.class);
 	private Connection conn;
 
-	static enum Counters {
-		NUM_OF_INSERTED_ROWS
-	}
-
 	public void setConnection(Connection con) throws IOException{
 		conn=con;
 	}
@@ -54,7 +50,7 @@ public class MySQLLoadDataMapper extends
 
 
 	@Override
-	protected void setup(Mapper.Context context) throws IOException,
+	protected void setup(Context context) throws IOException,
 			InterruptedException {
 		try {
 			Class.forName("com.mysql.jdbc.Driver").newInstance();
@@ -93,6 +89,23 @@ public class MySQLLoadDataMapper extends
 		}
 	}
 
+	/**
+	 * Map file tables to DB tables. File name can be &lt;tablename&gt; or
+	 * &lt;tablename&gt;-m-XXXXX.
+	 *
+	 * @param key the filename of the data stream
+	 * @return the DB table name
+	 * @see {@link
+	 *      org.apache.hadoop.mapreduce.lib.output.FileOutputFormat#getUniqueFile}
+	 */
+	private String keyToTablename(Text key) {
+		String filename = key.toString();
+		if (filename.matches("\\w+-[mr]-[0-9]{5}"))
+			return filename.substring(0, filename.length() - 8);
+		else
+			return filename;
+	}
+
 	@Override
 	public void map(Text key, FSDataInputStream val, Context context)
 			throws IOException, InterruptedException {
@@ -112,6 +125,8 @@ public class MySQLLoadDataMapper extends
 			BufferedReader headerReader = new BufferedReader(
 					new InputStreamReader(val));
 			String header = headerReader.readLine();
+			if (header == null)
+				return;
 			columnNames = header.split(",");
 			val.seek(header.getBytes(utf8).length + newline.length);
 		}
@@ -121,15 +136,18 @@ public class MySQLLoadDataMapper extends
 					.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_UPDATABLE);
 			stmt.setLocalInfileInputStream(val);
-			query = "load data local infile 'abc.txt' into table"
-					+ (keyIsTableName ? " " + key.toString() : "");
-			query += " " + querySuffix;
+			String tablename = (keyIsTableName ? keyToTablename(key) : "");
+			query = "load data local infile 'abc.txt' into table "
+					+ tablename + " ";
+			query += querySuffix;
 			if (hasHeaderLine)
 				query += " (" + StringUtils.join(columnNames, ",") + ")";
 			logger.debug("stmt: " + query);
 			int rows = stmt.executeUpdate(query);
 			logger.debug(rows + " rows updated");
-			context.getCounter(Counters.NUM_OF_INSERTED_ROWS).increment(rows);
+			if (!tablename.equals(""))
+				context.getCounter("MySQLLoadCounters","ROWS_INSERTED_TABLE_" + tablename).increment(rows);
+			context.getCounter("MySQLLoadCounters","ROWS_INSERTED_TOTAL").increment(rows);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -147,10 +165,10 @@ public class MySQLLoadDataMapper extends
 	}
 
 	@Override
-	protected void cleanup(Mapper.Context context) throws IOException,
+	protected void cleanup(Context context) throws IOException,
 			InterruptedException {
 		try {
-			if (conn != null) {
+			if (conn != null && !conn.isClosed()) {
 				conn.close();
 			}
 		} catch (SQLException s) {

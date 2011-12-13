@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -30,12 +31,11 @@ import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Counter;
-import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.junit.Test;
 
 import co.nubetech.apache.hadoop.DBConfiguration;
 import co.nubetech.hiho.common.HIHOConf;
-import co.nubetech.hiho.mapreduce.MySQLLoadDataMapper.Counters;
 
 public class TestMySQLLoadMapper {
 
@@ -44,7 +44,7 @@ public class TestMySQLLoadMapper {
 	@Test
 	public final void testSetup() throws Exception {
 
-		Mapper.Context context = mock(Mapper.Context.class);
+		Context context = mock(Context.class);
 		MySQLLoadDataMapper mapper = new MySQLLoadDataMapper() {
 			protected void connect(String curl, String u, String p) {	}
 		};
@@ -93,8 +93,23 @@ public class TestMySQLLoadMapper {
 
 	@Test
 	public final void testMapper() throws Exception {
+		runMapper("tablename");
+	}
 
-		Mapper.Context context = mock(Mapper.Context.class);
+	@Test
+	public final void testMapperWithPartFilenames() throws Exception {
+		runMapper("tablename-m-00005");
+	}
+
+	/**
+	 * @param string
+	 * @throws IOException
+	 * @throws SQLException
+	 * @throws InterruptedException
+	 */
+	private void runMapper(String tablename) throws IOException, SQLException,
+			InterruptedException {
+		Context context = mock(Context.class);
 		MySQLLoadDataMapper mapper = new MySQLLoadDataMapper();
 		FSDataInputStream val;
 		val = new FSDataInputStream(new MyInputStream());
@@ -113,10 +128,11 @@ public class TestMySQLLoadMapper {
 		when(context.getConfiguration()).thenReturn(conf);
 		when(stmt.executeUpdate(query)).thenReturn(10);
 		Counter counter = mock(Counter.class);
-		when(context.getCounter(Counters.NUM_OF_INSERTED_ROWS)).thenReturn(counter);
-		mapper.map(new Text("tablename"), val, context);
+		when(context.getCounter("MySQLLoadCounters","ROWS_INSERTED_TABLE_tablename")).thenReturn(counter);
+		when(context.getCounter("MySQLLoadCounters","ROWS_INSERTED_TOTAL")).thenReturn(counter);
+		mapper.map(new Text(tablename), val, context);
 		verify(stmt).setLocalInfileInputStream(val);
 		verify(stmt).executeUpdate(query);
-		verify(counter).increment(10);
+		verify(counter, times(2)).increment(10);
 	}
 }
