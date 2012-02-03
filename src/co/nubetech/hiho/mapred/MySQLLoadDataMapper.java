@@ -43,6 +43,7 @@ public class MySQLLoadDataMapper extends MapReduceBase
 	final static Logger logger = Logger
 			.getLogger(co.nubetech.hiho.mapreduce.MySQLLoadDataMapper.class);
 	private Connection conn;
+	private boolean disableKeys;
 
 	public void setConnection(Connection con) throws IOException{
 		conn=con;
@@ -72,6 +73,7 @@ public class MySQLLoadDataMapper extends MapReduceBase
 		querySuffix = job.get(HIHOConf.LOAD_QUERY_SUFFIX);
 		hasHeaderLine = job.getBoolean(HIHOConf.LOAD_HAS_HEADER, false);
 		keyIsTableName = job.getBoolean(HIHOConf.LOAD_KEY_IS_TABLENAME, false);
+		disableKeys = job.getBoolean(HIHOConf.LOAD_DISABLE_KEYS, false);
 	}
 
 	protected void connect(String connString, String username, String password)
@@ -135,15 +137,24 @@ public class MySQLLoadDataMapper extends MapReduceBase
 					.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_UPDATABLE);
 			String tablename = (keyIsTableName ? keyToTablename(key) : "");
+			if (disableKeys && !tablename.equals("")) {
+				reporter.setStatus("Disabling keys on " + tablename);
+				stmt.execute("ALTER TABLE " + tablename + " DISABLE KEYS");
+			}
 			stmt.setLocalInfileInputStream(val);
 			query = "load data local infile 'abc.txt' into table "
 					+ tablename + " ";
 			query += querySuffix;
 			if (hasHeaderLine)
 				query += " (" + StringUtils.join(columnNames, ",") + ")";
+			reporter.setStatus("Inserting into " + tablename);
 			logger.debug("stmt: " + query);
 			int rows = stmt.executeUpdate(query);
 			logger.debug(rows + " rows updated");
+			if (disableKeys && !tablename.equals("")) {
+				reporter.setStatus("Re-enabling keys on " + tablename);
+				stmt.execute("ALTER TABLE " + tablename + " ENABLE KEYS");
+			}
 			if (!tablename.equals(""))
 				reporter.getCounter("MySQLLoadCounters","ROWS_INSERTED_TABLE_" + tablename).increment(rows);
 			reporter.getCounter("MySQLLoadCounters","ROWS_INSERTED_TOTAL").increment(rows);

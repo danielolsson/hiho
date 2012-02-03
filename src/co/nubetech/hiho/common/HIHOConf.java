@@ -31,6 +31,7 @@ public interface HIHOConf {
 	public static final String NUMBER_MAPPERS = "mapreduce.jdbc.hiho.number.mappers";
 	public static final String LOAD_HAS_HEADER = "mapreduce.jdbc.hiho.mysql.headers";
 	public static final String LOAD_KEY_IS_TABLENAME = "mapreduce.jdbc.hiho.mysql.fileNameIsTable";
+	public static final String LOAD_DISABLE_KEYS = "mapreduce.jdbc.hiho.mysql.disableKeys";
 
 	// for loading oracle data
 	public static final String EXTERNAL_TABLE_DML = "mapreduce.jdbc.hiho.oracle.externaltable.dml";
